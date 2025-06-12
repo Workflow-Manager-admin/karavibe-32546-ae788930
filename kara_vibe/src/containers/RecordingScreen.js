@@ -1,3 +1,48 @@
+/*
+ * ==============================
+ * KARAVIBE DEBUG LOG FOR BUG ANALYSIS
+ * Core code involved in audio recording, MediaRecorder, and audio element source assignment.
+ * This is for explicit bug tracing of unsupported audio source issues (eg "no supported sources").
+ * MEDIARECORDER: handles recording to Blob, creation, then assignment to audioUrl and <audio src>.
+ * AUDIO TAG: playback of user recording or fallback.
+ * ==============================
+ *
+ * COMPONENTS TO INSPECT for bug analysis (per request):
+ *  - <RecordingControls/>: defines handleStartRecording, handleStopRecording, recordedChunks, MediaRecorder instance, Blob creation and assignment, and the src for <audio> preview
+ *  - <audio ref={audioPlayerRef} src={audioUrl} ...> -- for playback of the user recording
+ *  - preferredMimeType is "audio/webm;codecs=opus", fallback is "audio/webm"
+ * 
+ * LOGIC INVOLVED (extracted measures):
+ * 1. On Start Recording:
+ *      a) Calls navigator.mediaDevices.getUserMedia({ audio: true })
+ *      b) Determines supported MIME type: audio/webm;codecs=opus -> audio/webm -> error if neither
+ *      c) Instantiates new MediaRecorder(stream, { mimeType })
+ *      d) On dataavailable, records Blob slices into recordedChunks[]
+ *      e) On stop, creates blob: new Blob(recordedChunks, { type: mimeType })
+ *      f) Calls URL.createObjectURL(blob) and assigns to setAudioUrl (and audio element src)
+ *      => (the type of blob; browser support)
+ * 
+ * 2. On Recording Preview/Playback:
+ *      The <audio src={audioUrl}> is rendered, referencing the object-URL Blob of user's recording.
+ *      playbackSupported state is checked using canPlayType for audio/webm;codecs=opus and audio/webm
+ *      If neither is supported, disables preview, with error shown.
+ * 
+ * 3. Error condition (per user): audio tag displays "The element has no supported sources"
+ *      Meaning: mimetype not supported; blob missing; or browser doesn't understand src=ObjectURL for audio/webm, or the blob was created with an incorrect MIME type.
+ * 
+ * DEBUG/TRACE SUGGESTIONS for further analysis:
+ *  - Inspect recordingSupported and playbackSupported in live DOM
+ *  - Inspect actual recorded blob's MIME type (console.log(blob.type))
+ *  - Confirm: proper setAudioUrl gets called with Blob for src; no race or memory issue
+ *  - Check canPlayType response for audio/webm{;codecs=opus} and audio/wav
+ *  - Check if recorded blob is nonempty after stop
+ *  - Check if <audio src={audioUrl}> actually fetches the resource (Dev Tools: Network tab for blob:...)
+ * 
+ *  ========== INFRA FOR LOGGING (add as next step if needed) ==========
+ *  The above summary provides all code context you asked for. No additional error logs received.
+ */
+
+// The original RecordingScreen component code is restored below to resolve the build error.
 import React, { useRef, useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import songsData from "../assets/songs.json";
@@ -153,7 +198,6 @@ function RecordingScreen() {
 
   return (
     <div style={{ paddingTop: 24, paddingBottom: 48 }}>
-      {/* Song & Title section */}
       <div style={{ marginBottom: 10 }}>
         <button className="btn" style={{ marginBottom: 18 }} onClick={() => navigate("/songs")}>
           ← Back to Song Library
@@ -163,7 +207,6 @@ function RecordingScreen() {
         </h1>
         <div style={{ color: "var(--text-secondary)", marginBottom: 8 }}>{song.artist}</div>
       </div>
-      {/* Instrumental Playback Area + Synced Lyrics */}
       <div
         style={{
           border: "1px solid var(--border-color)",
@@ -177,7 +220,6 @@ function RecordingScreen() {
           gap: 20,
         }}
       >
-        {/* Audio Player Demo - use a short copyright-free audio */}
         <div style={{ width: "100%", maxWidth: 330, textAlign: "center" }}>
           <div style={{
             color: "var(--accent)",
@@ -229,10 +271,8 @@ function RecordingScreen() {
             </span>
           </div>
         </div>
-        {/* Lyrics Display synced with the audio */}
         <LyricsDisplay lyrics={lyrics} currentTime={currentTime} />
       </div>
-      {/* Record/Stop Controls and Filter Selection Section */}
       <div style={{
         display: "flex",
         flexDirection: "row",
@@ -266,7 +306,6 @@ function RecordingScreen() {
           onChange={setSelectedFilter}
         />
       </div>
-      {/* Show audio player only if recording is present */}
       {audioUrl && (
         <div style={{ marginTop: 16 }}>
           <audio
@@ -316,7 +355,6 @@ function RecordingScreen() {
 }
 
 // PUBLIC_INTERFACE
-// RecordingControls component with prop-injected state for the new filter and recording flow.
 function RecordingControls({
   isRecording,
   setIsRecording,
@@ -700,7 +738,6 @@ function RecordingControls({
           </div>
         </div>
       )}
-      {/* Show audio player only if recording is present */}
       {audioUrl && (
         <div style={{ marginTop: 16 }}>
           <audio
@@ -725,7 +762,6 @@ function RecordingControls({
   );
 }
 
-// Utility to format seconds to mm:ss
 function formatTime(sec) {
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
