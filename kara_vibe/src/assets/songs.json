@@ -1,0 +1,9 @@
+[
+  { "id": "1", "title": "Shallow", "artist": "Lady Gaga & Bradley Cooper", "genre": "Pop", "year": 2018 },
+  { "id": "2", "title": "Shape of You", "artist": "Ed Sheeran", "genre": "Pop", "year": 2017 },
+  { "id": "3", "title": "Hallelujah", "artist": "Leonard Cohen", "genre": "Folk", "year": 1984 },
+  { "id": "4", "title": "Rolling in the Deep", "artist": "Adele", "genre": "Pop/Soul", "year": 2010 },
+  { "id": "5", "title": "Let It Go", "artist": "Idina Menzel", "genre": "Musical", "year": 2013 },
+  { "id": "6", "title": "Bohemian Rhapsody", "artist": "Queen", "genre": "Rock", "year": 1975 },
+  { "id": "7", "title": "Counting Stars", "artist": "OneRepublic", "genre": "Pop", "year": 2013 }
+]
