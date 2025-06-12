@@ -1,10 +1,11 @@
-import React from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import songsData from "../assets/songs.json";
+import LyricsDisplay from "../components/LyricsDisplay";
 
 /**
  * PUBLIC_INTERFACE
- * RecordingScreen container – allows user to play instrumental, see (placeholder) synced lyrics,
+ * RecordingScreen container – allows user to play instrumental, see (synced) lyrics,
  * record vocals, and select voice filters (placeholder). Receives songId via route param.
  */
 function RecordingScreen() {
@@ -14,6 +15,82 @@ function RecordingScreen() {
   // Find the selected song data
   const song = songsData.find((s) => String(s.id) === String(songId));
 
+  // MOCK: Lyrics with timestamps demo for each song (for real app, would fetch per song)
+  // Simple lines with time in seconds for testing sync
+  const demoLyrics = [
+    { time: 0, text: "[Intro]" },
+    { time: 2, text: "Tell me somethin', girl" },
+    { time: 6, text: "Are you happy in this modern world?" },
+    { time: 10, text: "Or do you need more?" },
+    { time: 14, text: "Is there somethin' else you're searchin' for?" },
+    { time: 20, text: "[Chorus]" },
+    { time: 22, text: "I'm fallin'" },
+    { time: 25, text: "In all the good times I find myself" },
+    { time: 29, text: "Longin' for change" },
+    { time: 33, text: "And in the bad times, I fear myself" },
+    { time: 40, text: "..." },
+  ];
+
+  // For real implementation, switch lyrics per song/ID from a (future) backend.
+  const lyrics = demoLyrics;
+
+  // Audio fake/mock: use a demo track, but for demonstration, let's use <audio> w/ a short sample instrumental URL.
+  // To keep it simple, use a royalty-free sample if in prod; for now, use a short data URI or placeholder.
+  // Here, we'll use a <audio> and simulate progress for lyric sync.
+
+  // Use ref to access and control audio element
+  const audioRef = useRef(null);
+
+  // For lyrics sync: controlled by audio element's currentTime (state needed for re-render)
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  // Auto update currentTime in sync with audio
+  useEffect(() => {
+    const audioEl = audioRef.current;
+    if (!audioEl) return;
+    // Listen to timeupdate, play, pause, seeked
+    const onTimeUpdate = () => setCurrentTime(audioEl.currentTime);
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    const onSeeked = () => setCurrentTime(audioEl.currentTime);
+
+    audioEl.addEventListener("timeupdate", onTimeUpdate);
+    audioEl.addEventListener("play", onPlay);
+    audioEl.addEventListener("pause", onPause);
+    audioEl.addEventListener("seeked", onSeeked);
+
+    // Clean up
+    return () => {
+      audioEl.removeEventListener("timeupdate", onTimeUpdate);
+      audioEl.removeEventListener("play", onPlay);
+      audioEl.removeEventListener("pause", onPause);
+      audioEl.removeEventListener("seeked", onSeeked);
+    };
+  }, []);
+
+  // Optionally implement simple play/pause controls for user interaction for demo
+  const handlePlayPause = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (isPlaying) {
+      audio.pause();
+    } else {
+      audio.play();
+    }
+  };
+
+  // Reset lyrics & progress if song changes (unlikely once loaded, but for robustness)
+  useEffect(() => {
+    setCurrentTime(0);
+    setIsPlaying(false);
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0;
+      audioRef.current.pause();
+    }
+  }, [songId]);
+
+  // Fallback for invalid song
   if (!song) {
     // If invalid songId, navigate back or show fallback
     return (
@@ -33,7 +110,6 @@ function RecordingScreen() {
     );
   }
 
-  // UI scaffold – replace logic with real audio/lyrics features in future upgrades
   return (
     <div style={{ paddingTop: 24, paddingBottom: 48 }}>
       {/* Song & Title section */}
@@ -46,7 +122,7 @@ function RecordingScreen() {
         </h1>
         <div style={{ color: "var(--text-secondary)", marginBottom: 8 }}>{song.artist}</div>
       </div>
-      {/* Instrumental Playback Area */}
+      {/* Instrumental Playback Area + Synced Lyrics */}
       <div
         style={{
           border: "1px solid var(--border-color)",
@@ -57,10 +133,10 @@ function RecordingScreen() {
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 24,
+          gap: 20,
         }}
       >
-        {/* Placeholder Audio Player */}
+        {/* Audio Player Demo - use a short copyright-free audio */}
         <div style={{ width: "100%", maxWidth: 330, textAlign: "center" }}>
           <div style={{
             color: "var(--accent)",
@@ -70,43 +146,47 @@ function RecordingScreen() {
           }}>
             Instrumental Track
           </div>
-          {/* Placeholder for <audio> element – real audio integration in the future */}
-          <div style={{
-            display: "inline-block",
-            padding: "16px 32px",
-            borderRadius: 8,
-            background: "#232535",
-            color: "var(--text-secondary)",
-            fontWeight: 400,
-            marginBottom: 8,
-            border: "1px solid var(--border-color)"
-          }}>
-            [Audio Player will go here]
+          {/* Simple audio player control (using a sample) */}
+          <audio
+            ref={audioRef}
+            src="https://cdn.pixabay.com/audio/2022/08/20/audio_124bfa496e.mp3" // Royalty-free short track (<1min) for demo
+            controls
+            style={{
+              width: "100%",
+              marginTop: 3,
+              marginBottom: 6,
+              background: "#232535",
+              borderRadius: 8,
+              boxShadow: "0 1px 10px #14131433",
+            }}
+          />
+          <div style={{ margin: "8px 0" }}>
+            <button
+              className="btn"
+              onClick={handlePlayPause}
+              style={{
+                fontWeight: 600,
+                background: isPlaying ? "#d43a58" : "var(--primary)",
+                color: isPlaying ? "white" : "#fff",
+                borderRadius: 22,
+                padding: "7px 30px",
+                marginRight: 10
+              }}
+              aria-label={isPlaying ? "Pause" : "Play"}
+            >
+              {isPlaying ? "Pause" : "Play"}
+            </button>
+            <span style={{
+              color: "var(--text-secondary)",
+              fontSize: 13,
+              marginLeft: 8
+            }}>
+              {formatTime(currentTime)}
+            </span>
           </div>
         </div>
-        {/* Synced Lyrics Display (Placeholder) */}
-        <div style={{
-          width: "100%",
-          maxWidth: 420,
-          borderRadius: 6,
-          background: "#191a22",
-          border: "1px solid var(--border-color)",
-          padding: "18px 20px",
-          color: "var(--text-color)",
-          textAlign: "center"
-        }}>
-          {/* Future: Render synced lyrics */}
-          <span style={{
-            fontWeight: 500,
-            color: "var(--primary)",
-            fontSize: "1.25rem"
-          }}>
-            [Lyrics display placeholder]
-          </span>
-          <div style={{ fontSize: "1rem", marginTop: 8, color: "var(--text-secondary)" }}>
-            Synced lyrics will appear here as you sing
-          </div>
-        </div>
+        {/* Lyrics Display synced with the audio */}
+        <LyricsDisplay lyrics={lyrics} currentTime={currentTime} />
       </div>
       {/* Record/Stop Controls and Filter Selection Section */}
       <div style={{
@@ -176,6 +256,13 @@ function RecordingScreen() {
       {/* Future enhancements: visualization, playback, share */}
     </div>
   );
+}
+
+// Utility to format seconds to mm:ss
+function formatTime(sec) {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 export default RecordingScreen;
