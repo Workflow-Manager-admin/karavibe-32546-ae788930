@@ -281,6 +281,7 @@ function PlaybackScreen() {
           Pass the lyrics for the current song (or recording) and the audio's currentTime.
           LyricsDisplay will highlight and auto-scroll lyrics in sync with playback progress ("currentTime").
         */}
+        {/* Pass correct lyrics and currentTime, updates on every timeupdate */}
         <LyricsDisplay
           lyrics={lyrics}
           currentTime={currentTime}
