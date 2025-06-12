@@ -9,7 +9,10 @@ import SongCard from "./SongCard";
  */
 function SongList({ songs, onSongSelect }) {
   // Ensure no accidental use of PUBLIC_URL
-  // (No usage here, code kept for troubleshooting context)
+  // No usage of PUBLIC_URL here; placeholder comment for troubleshooting context.
+  // If you need to refer to the public folder, use process.env.PUBLIC_URL in JS/JSX,
+  // or %PUBLIC_URL% in HTML templates.
+
   if (!songs || songs.length === 0) return null;
   return (
     <div style={{
