@@ -5,6 +5,7 @@ import Layout from "./containers/Layout";
 import Home from "./containers/Home";
 import SongLibrary from "./containers/SongLibrary";
 import RecordingScreen from "./containers/RecordingScreen";
+import PlaybackScreen from "./containers/PlaybackScreen";
 
 /**
  * PUBLIC_INTERFACE
@@ -23,6 +24,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/songs" element={<SongLibrary />} />
           <Route path="/record/:songId" element={<RecordingScreen />} />
+          <Route path="/playback" element={<PlaybackScreen />} />
           {/* Add more routes as features/screens are implemented */}
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
