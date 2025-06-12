@@ -7,32 +7,39 @@ import songsData from "../assets/songs.json";
  * PUBLIC_INTERFACE
  * PlaybackScreen: Allows users to play back their saved recordings.
  * Features custom play/pause, seek, progress bar, 
- * metadata display, and synchronized lyrics.
- * Supports navigation from anywhere and receives playback source via navigation state or params.
+ * metadata display, filter display, and synchronized lyrics.
+ * - Receives nav state: { audioUrl, title, artist, filter, lyrics, songId }
+ * - Or params for future extensibility.
  */
 function PlaybackScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   const { recordingId } = useParams();
 
-  // Get playback data from navigation state, or fallback to query params/URL
-  // State: { audioUrl, title, artist, lyrics }
+  // 1. Get playback state from navigation state or fallback query/param
   const playbackState = location.state || {};
-  const audioUrl = playbackState.audioUrl || ""; // Should be Blob URL or remote file URL
+
+  // Audio source: Blob URL or remote mp3 (actual impl: recording url, demo: fallback empty disables)
+  const audioUrl = playbackState.audioUrl || "";
+  // Song metadata
   const [metaTitle, setMetaTitle] = useState(playbackState.title || "");
   const [metaArtist, setMetaArtist] = useState(playbackState.artist || "");
-  // For demo, fallback to a song if empty
+  const [metaFilter, setMetaFilter] = useState(playbackState.filter || "");
+  const [metaYear, setMetaYear] = useState(undefined);
+
+  // Fallback: find song in db by id if not supplied
   useEffect(() => {
     if ((!metaTitle || !metaArtist) && playbackState.songId) {
       const song = songsData.find(s => String(s.id) === String(playbackState.songId));
       if (song) {
         setMetaTitle(song.title);
         setMetaArtist(song.artist);
+        setMetaYear(song.year);
       }
     }
   }, [playbackState.songId, metaTitle, metaArtist]);
 
-  // Lyrics: attempt to get from state, fallback to demo lyrics
+  // Lyrics: from state, else fallback to demo
   const demoLyrics = [
     { time: 0, text: "[Intro]" },
     { time: 2, text: "Tell me somethin', girl" },
@@ -54,34 +61,35 @@ function PlaybackScreen() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
 
-  // Sync current time for lyric display & seek/progress
+  // 2. Synchronize: lyrics, seek, play
   useEffect(() => {
     const audioEl = audioRef.current;
     if (!audioEl) return;
-    const onTimeUpdate = () => setCurrentTime(audioEl.currentTime);
-    const onDurationChange = () => setDuration(audioEl.duration || 0);
+    const updateTime = () => setCurrentTime(audioEl.currentTime);
+    const updateDuration = () => setDuration(audioEl.duration || 0);
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
 
-    audioEl.addEventListener("timeupdate", onTimeUpdate);
-    audioEl.addEventListener("durationchange", onDurationChange);
+    audioEl.addEventListener("timeupdate", updateTime);
+    audioEl.addEventListener("durationchange", updateDuration);
     audioEl.addEventListener("play", onPlay);
     audioEl.addEventListener("pause", onPause);
 
-    // Initialize times if loaded
+    // Initialize duration for preloaded
     if (audioEl.duration) setDuration(audioEl.duration);
     setCurrentTime(audioEl.currentTime);
 
     return () => {
-      audioEl.removeEventListener("timeupdate", onTimeUpdate);
-      audioEl.removeEventListener("durationchange", onDurationChange);
+      audioEl.removeEventListener("timeupdate", updateTime);
+      audioEl.removeEventListener("durationchange", updateDuration);
       audioEl.removeEventListener("play", onPlay);
       audioEl.removeEventListener("pause", onPause);
     };
   }, [audioUrl]);
 
-  // Play/Pause control
-  const handlePlayPause = () => {
+  // Playback controls
+  // PUBLIC_INTERFACE
+  function handlePlayPause() {
     const audio = audioRef.current;
     if (!audio) return;
     if (isPlaying) {
@@ -89,17 +97,15 @@ function PlaybackScreen() {
     } else {
       audio.play();
     }
-  };
-
-  // Seek in audio when user moves the range input
-  const handleSeek = (e) => {
+  }
+  // Seek when user changes range
+  function handleSeek(e) {
     const audio = audioRef.current;
     if (!audio) return;
     audio.currentTime = Number(e.target.value);
-    setCurrentTime(audio.currentTime); // For immediate UI update
-  };
-
-  // Format time as mm:ss
+    setCurrentTime(audio.currentTime);
+  }
+  // PUBLIC_INTERFACE
   function formatTime(sec) {
     if (typeof sec !== "number" || Number.isNaN(sec)) return "0:00";
     const m = Math.floor(sec / 60);
@@ -107,7 +113,7 @@ function PlaybackScreen() {
     return `${m}:${s.toString().padStart(2, "0")}`;
   }
 
-  // If no audioUrl, fallback message
+  // Fallback UX: no audio present disables playback
   if (!audioUrl) {
     return (
       <div style={{ textAlign: "center", marginTop: 40, color: "var(--text-secondary)" }}>
@@ -126,8 +132,17 @@ function PlaybackScreen() {
     );
   }
 
+  // Filter display: humanize string (e.g. "robot" => "Robot Effect", etc.)
+  function prettyFilter(label) {
+    if (!label) return "None";
+    if (label === "robot") return "Robot";
+    if (label === "reverb") return "Reverb";
+    if (label === "auto-tune") return "Auto-Tune";
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  }
+
   return (
-    <div style={{ maxWidth: 640, margin: "0 auto", padding: "32px 0", minHeight: 480 }}>
+    <div style={{ maxWidth: 660, margin: "0 auto", padding: "32px 0", minHeight: 480 }}>
       <button
         className="btn"
         style={{ marginBottom: 18 }}
@@ -137,7 +152,7 @@ function PlaybackScreen() {
       </button>
       <h1 className="title" style={{ fontSize: "1.9rem" }}>Playback</h1>
 
-      {/* Playback metadata */}
+      {/* Metadata Section */}
       <div
         style={{
           border: "1px solid var(--border-color)",
@@ -154,9 +169,24 @@ function PlaybackScreen() {
         <div style={{ fontSize: 18, color: "var(--accent)", marginBottom: 7 }}>
           {metaArtist || <span style={{ color: "var(--text-secondary)" }}>[Unknown Artist]</span>}
         </div>
-        {/* Additional meta: duration */}
-        <div style={{ color: "var(--text-secondary)", fontSize: 14, marginBottom: 8 }}>
+        {metaYear && (
+          <div style={{ color: "var(--text-secondary)", fontSize: 14 }}>
+            Year: {metaYear}
+          </div>
+        )}
+        <div style={{
+          color: "var(--text-secondary)",
+          fontSize: 14,
+          margin: "9px 0 6px 0"
+        }}>
           Length: {formatTime(duration)}
+        </div>
+        <div style={{
+          color: "var(--primary)",
+          fontSize: 16,
+          marginTop: 6
+        }}>
+          Voice Filter: <span style={{ color: "var(--accent)", fontWeight: 500 }}>{prettyFilter(metaFilter)}</span>
         </div>
       </div>
 
@@ -181,7 +211,6 @@ function PlaybackScreen() {
           style={{ display: "none" }}
         />
         <div style={{ width: "100%", maxWidth: 350, margin: "0 auto", marginBottom: 16 }}>
-          {/* Progress/seek bar */}
           <input
             type="range"
             min={0}
@@ -212,7 +241,6 @@ function PlaybackScreen() {
             <span>{formatTime(duration)}</span>
           </div>
         </div>
-        {/* Play/Pause Button */}
         <button
           className="btn btn-large"
           onClick={handlePlayPause}
