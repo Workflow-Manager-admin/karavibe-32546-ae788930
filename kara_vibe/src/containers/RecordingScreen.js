@@ -197,40 +197,8 @@ function RecordingScreen() {
         justifyContent: "center",
         marginTop: 18
       }}>
-        {/* Record/Stop Button – Scaffold only, no recording logic */}
-        <div style={{ flex: 1, minWidth: 180, maxWidth: 340 }}>
-          <div style={{ marginBottom: 6, fontWeight: 500 }}>Controls</div>
-          <button
-            className="btn btn-large"
-            style={{
-              background: "var(--accent)",
-              color: "#10100b",
-              width: "100%",
-              fontWeight: 700,
-              fontSize: "1.07rem"
-            }}
-            // Placeholder handler
-            onClick={() => { alert("Recording feature coming soon!"); }}
-            aria-label="Start Recording"
-          >
-            <span role="img" aria-label="mic">🎙️</span> Record
-          </button>
-          <button
-            className="btn btn-large"
-            style={{
-              background: "#d43a58",
-              color: "white",
-              width: "100%",
-              fontWeight: 700,
-              fontSize: "1.07rem",
-              marginTop: 12
-            }}
-            disabled
-            aria-label="Stop Recording"
-          >
-            <span role="img" aria-label="stop">⏹️</span> Stop
-          </button>
-        </div>
+        {/* Record, Stop, Play logic implemented – handles browser mic recording & playback */}
+        <RecordingControls />
         {/* Voice Filter Selection – placeholder only */}
         <div style={{
           flex: 1,
@@ -257,6 +225,187 @@ function RecordingScreen() {
     </div>
   );
 }
+
+// PUBLIC_INTERFACE
+/**
+ * RecordingControls
+ * Provides microphone access, voice recording using MediaRecorder, and audio playback.
+ * UI: Start Recording, Stop Recording, Play Recording controls, and in-page audio player.
+ */
+function RecordingControls() {
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordedChunks, setRecordedChunks] = useState([]);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const [audioUrl, setAudioUrl] = useState(null);
+  const [isPlayingRecording, setIsPlayingRecording] = useState(false);
+  const [errorMsg, setErrorMsg] = useState(null);
+  const audioPlayerRef = useRef(null);
+  const [recordingSupported, setRecordingSupported] = useState(typeof window !== "undefined" && !!(window.MediaRecorder));
+
+  useEffect(() => {
+    // Cleanup blob URL when component unmounts or when new recording is made
+    return () => {
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
+    };
+  }, [audioUrl]);
+
+  // Handle playback ended to update play button state
+  useEffect(() => {
+    const player = audioPlayerRef.current;
+    if (!player) return;
+    const onEnded = () => setIsPlayingRecording(false);
+    player.addEventListener("ended", onEnded);
+    return () => {
+      player.removeEventListener("ended", onEnded);
+    };
+  }, []);
+
+  // Handler: Start recording
+  const handleStartRecording = async () => {
+    setErrorMsg(null);
+    if (!recordingSupported) {
+      setErrorMsg("Recording is not supported in your browser.");
+      return;
+    }
+    // Ask for mic permission
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new window.MediaRecorder(stream);
+      setMediaRecorder(recorder);
+      setRecordedChunks([]); // Clear prev
+      recorder.ondataavailable = event => {
+        if (event.data.size > 0) setRecordedChunks(prev => prev.concat(event.data));
+      };
+      recorder.onstop = () => {
+        const blob = new Blob(recordedChunks, { type: "audio/webm" });
+        if (audioUrl) URL.revokeObjectURL(audioUrl);
+        setAudioUrl(URL.createObjectURL(blob));
+        // Stop mic tracks
+        stream.getTracks().forEach(track => track.stop());
+        setIsRecording(false);
+      };
+      recorder.start();
+      setIsRecording(true);
+      setAudioUrl(null);
+    } catch (err) {
+      setErrorMsg("Microphone access denied or not available.");
+    }
+  };
+
+  // Handler: Stop recording
+  const handleStopRecording = () => {
+    if (mediaRecorder && isRecording) {
+      mediaRecorder.stop();
+      setMediaRecorder(null);
+    }
+  };
+
+  // Handler: Play the latest recording
+  const handlePlayRecording = () => {
+    if (audioPlayerRef.current && audioUrl) {
+      audioPlayerRef.current.currentTime = 0;
+      audioPlayerRef.current.play();
+      setIsPlayingRecording(true);
+    }
+  };
+
+  return (
+    <div style={{ flex: 1, minWidth: 200, maxWidth: 350, display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ marginBottom: 6, fontWeight: 500 }}>Controls</div>
+      {/* Show error message if any */}
+      {errorMsg && (
+        <div style={{
+          color: "#d43a58",
+          fontSize: 14,
+          marginBottom: 7,
+          background: "rgba(85,0,0,0.09)",
+          borderRadius: 4,
+          padding: 6
+        }}>
+          {errorMsg}
+        </div>
+      )}
+      <button
+        className="btn btn-large"
+        style={{
+          background: isRecording ? "var(--secondary)" : "var(--accent)",
+          color: "#10100b",
+          width: "100%",
+          fontWeight: 700,
+          fontSize: "1.07rem",
+          opacity: isRecording ? 0.5 : 1,
+          cursor: isRecording ? "not-allowed" : "pointer",
+          transition: "background .18s"
+        }}
+        onClick={handleStartRecording}
+        disabled={isRecording}
+        aria-label="Start Recording"
+      >
+        <span role="img" aria-label="mic">🎙️</span> Start Recording
+      </button>
+      <button
+        className="btn btn-large"
+        style={{
+          background: "#d43a58",
+          color: "white",
+          width: "100%",
+          fontWeight: 700,
+          fontSize: "1.07rem",
+          marginTop: 10,
+          opacity: !isRecording ? 0.5 : 1,
+          cursor: !isRecording ? "not-allowed" : "pointer"
+        }}
+        onClick={handleStopRecording}
+        disabled={!isRecording}
+        aria-label="Stop Recording"
+      >
+        <span role="img" aria-label="stop">⏹️</span> Stop Recording
+      </button>
+      <button
+        className="btn btn-large"
+        style={{
+          background: "#7691ff",
+          color: "#191a1a",
+          width: "100%",
+          fontWeight: 700,
+          fontSize: "1.07rem",
+          marginTop: 10,
+          opacity: !audioUrl || isRecording ? 0.5 : 1,
+          cursor: !audioUrl || isRecording ? "not-allowed" : "pointer"
+        }}
+        onClick={handlePlayRecording}
+        disabled={!audioUrl || isRecording}
+        aria-label="Play Recording"
+      >
+        <span role="img" aria-label="play">▶️</span> Play Recording
+      </button>
+      {/* Show audio player only if recording is present */}
+      {audioUrl && (
+        <div style={{ marginTop: 16 }}>
+          <audio
+            ref={audioPlayerRef}
+            src={audioUrl}
+            controls
+            style={{
+              width: "100%",
+              background: "#232535",
+              borderRadius: 8,
+              boxShadow: "0 1px 10px #14131433",
+            }}
+          />
+          {isPlayingRecording && (
+            <div style={{ color: "var(--primary)", fontWeight: 600, textAlign: "center", fontSize: 14, marginTop: 4 }}>
+              Playing your latest take...
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 // Utility to format seconds to mm:ss
 function formatTime(sec) {
