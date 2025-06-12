@@ -226,6 +226,7 @@ function RecordingScreen() {
           isRecording={isRecording}
           setIsRecording={setIsRecording}
           audioRef={audioRef}
+          song={song}
         />
         {/* Voice Filter Selection – placeholder only */}
         <div style={{
@@ -269,12 +270,19 @@ function RecordingScreen() {
  *    setIsRecording: fn, to change recording state (to control parent sync)
  *    audioRef: ref to the instrumental audio DOM element
  */
-function RecordingControls({ isRecording, setIsRecording, audioRef }) {
+function RecordingControls({ isRecording, setIsRecording, audioRef, song }) {
   const [recordedChunks, setRecordedChunks] = useState([]);
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [audioUrl, setAudioUrl] = useState(null);
   const [isPlayingRecording, setIsPlayingRecording] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [downloadUrl, setDownloadUrl] = useState(null);
+  const [fileName, setFileName] = useState("");
+  // Metadata fields (for demonstration can be edited/extended)
+  const [metaTitle, setMetaTitle] = useState(song?.title ?? "");
+  const [metaArtist, setMetaArtist] = useState(song?.artist ?? "");
+
   const audioPlayerRef = useRef(null);
 
   // Track support for MediaRecorder and playback MIME
@@ -345,7 +353,18 @@ function RecordingControls({ isRecording, setIsRecording, audioRef }) {
       recorder.onstop = () => {
         const blob = new Blob(recordedChunks, { type: mimeType });
         if (audioUrl) URL.revokeObjectURL(audioUrl);
-        setAudioUrl(URL.createObjectURL(blob));
+        const audioBlobUrl = URL.createObjectURL(blob);
+        setAudioUrl(audioBlobUrl);
+        setDownloadUrl(null);
+        setDownloadSuccess(false);
+        // Build a suggested filename from metadata if available
+        let baseName = "karaoke-recording";
+        if (metaTitle && metaArtist) {
+          baseName = `${metaTitle} - ${metaArtist}`.replace(/[^\w\d _-]/g, "");
+        } else if (metaTitle) {
+          baseName = `${metaTitle}`.replace(/[^\w\d _-]/g, "");
+        }
+        setFileName(`${baseName}.${mimeType.includes("wav") ? "wav" : "webm"}`);
         stream.getTracks().forEach(track => track.stop()); // Clean up mic
         setIsRecording(false); // finish recording state (propagates out to parent)
       };
@@ -412,7 +431,58 @@ function RecordingControls({ isRecording, setIsRecording, audioRef }) {
     }
   };
 
+  // Handler: Save/Download the latest recording with metadata (if any)
+  const handleSaveRecording = (e) => {
+    e.preventDefault();
+    setDownloadSuccess(false);
+
+    if (!audioUrl || recordedChunks.length === 0) {
+      setErrorMsg("No recording to save.");
+      return;
+    }
+    // Compose blob and optionally metadata (.webm/.wav do not support user metadata in-browser for download, 
+    // but we create a metadata JSON for demo and name it similarly)
+    const mime = recordedChunks[0]?.type || "audio/webm";
+    const combinedBlob = new Blob(recordedChunks, { type: mime });
+    const url = URL.createObjectURL(combinedBlob);
+
+    // Save the audio file
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName || "karaoke-recording.webm";
+    document.body.appendChild(link);
+    link.click();
+    setDownloadSuccess(true);
+    setDownloadUrl(url);
+
+    // Also allow downloading metadata separately (optional UX demonstration)
+    if (metaTitle || metaArtist) {
+      const metadata = {
+        title: metaTitle,
+        artist: metaArtist,
+        file: link.download,
+        date: new Date().toISOString()
+      };
+      const metadataBlob = new Blob(
+        [JSON.stringify(metadata, null, 2)],
+        { type: "application/json" }
+      );
+      const metadataUrl = URL.createObjectURL(metadataBlob);
+      
+      setTimeout(() => {
+        const metaLink = document.createElement("a");
+        metaLink.href = metadataUrl;
+        metaLink.download = `${fileName.replace(/\.\w+$/, '')}.meta.json`;
+        document.body.appendChild(metaLink);
+        metaLink.click();
+        document.body.removeChild(metaLink);
+      }, 350); // Slight delay to avoid browser restrictions
+    }
+    document.body.removeChild(link);
+  };
+
   const playButtonEnabled = !!audioUrl && !isRecording && playbackSupported;
+  const saveButtonEnabled = !!audioUrl && !isRecording && recordedChunks.length > 0;
 
   return (
     <div style={{ flex: 1, minWidth: 200, maxWidth: 350, display: "flex", flexDirection: "column", gap: 6 }}>
@@ -430,6 +500,31 @@ function RecordingControls({ isRecording, setIsRecording, audioRef }) {
           {errorMsg}
         </div>
       )}
+
+      {/* Metadata fields to optionally edit/persist */}
+      {(audioUrl && !isRecording && (metaTitle || metaArtist !== undefined)) && (
+        <form style={{ marginBottom: 7 }}>
+          <div style={{ marginBottom: 7 }}>
+            <label style={{ fontWeight: 400, marginRight: 6 }}>Title:</label>
+            <input
+              type="text"
+              value={metaTitle}
+              onChange={e => setMetaTitle(e.target.value)}
+              style={{ width: "62%", padding: "3px 8px", borderRadius: 3, border: "1px solid #777", marginRight: 4, fontSize: 13 }}
+            />
+          </div>
+          <div style={{ marginBottom: 5 }}>
+            <label style={{ fontWeight: 400, marginRight: 6 }}>Artist:</label>
+            <input
+              type="text"
+              value={metaArtist}
+              onChange={e => setMetaArtist(e.target.value)}
+              style={{ width: "62%", padding: "3px 8px", borderRadius: 3, border: "1px solid #777", fontSize: 13 }}
+            />
+          </div>
+        </form>
+      )}
+
       {!recordingSupported && (
         <div style={{
           color: "#d43a58",
@@ -503,6 +598,55 @@ function RecordingControls({ isRecording, setIsRecording, audioRef }) {
       >
         <span role="img" aria-label="play">▶️</span> Play Recording
       </button>
+      {/* Save button appears only when a recording is available and not recording */}
+      <button
+        className="btn btn-large"
+        style={{
+          background: "#53d464",
+          color: "#191a1a",
+          width: "100%",
+          fontWeight: 700,
+          fontSize: "1.07rem",
+          marginTop: 10,
+          opacity: saveButtonEnabled ? 1 : 0.5,
+          cursor: saveButtonEnabled ? "pointer" : "not-allowed",
+          border: "1px solid var(--primary)"
+        }}
+        onClick={handleSaveRecording}
+        disabled={!saveButtonEnabled}
+        aria-label="Save Recording"
+      >
+        <span role="img" aria-label="save">💾</span> Save Recording
+      </button>
+
+      {downloadSuccess && downloadUrl && (
+        <div style={{ marginTop: 24, background: "#171c18", padding: 12, border: "1px solid var(--primary)", borderRadius: 7, textAlign: "center" }}>
+          <div style={{ color: "var(--primary)", fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
+            🎉 Recording Saved!
+          </div>
+          <div>
+            <a
+              href={downloadUrl}
+              download={fileName}
+              style={{ color: "#53d464", fontWeight: 600, fontSize: 15, marginRight: 10, textDecoration: "underline" }}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Download audio
+            </a>
+            <span style={{ color: "var(--text-secondary)", fontSize: 13, marginLeft: 3 }}>|</span>
+            <a
+              href={downloadUrl}
+              style={{ color: "#7691ff", fontWeight: 600, fontSize: 15, marginLeft: 7, textDecoration: "underline" }}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Playback
+            </a>
+          </div>
+        </div>
+      )}
+
       {/* Show audio player only if recording is present */}
       {audioUrl && (
         <div style={{ marginTop: 16 }}>
