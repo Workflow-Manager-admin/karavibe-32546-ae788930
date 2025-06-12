@@ -226,8 +226,8 @@ function RecordingScreen() {
   );
 }
 
-// PUBLIC_INTERFACE
 /**
+ * PUBLIC_INTERFACE
  * RecordingControls
  * Provides microphone access, voice recording using MediaRecorder, and audio playback.
  * UI: Start Recording, Stop Recording, Play Recording controls, and in-page audio player.
@@ -240,7 +240,28 @@ function RecordingControls() {
   const [isPlayingRecording, setIsPlayingRecording] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const audioPlayerRef = useRef(null);
-  const [recordingSupported, setRecordingSupported] = useState(typeof window !== "undefined" && !!(window.MediaRecorder));
+
+  // Track support for MediaRecorder and playback MIME
+  const [recordingSupported, setRecordingSupported] = useState(
+    typeof window !== "undefined" && !!window.MediaRecorder
+  );
+  const [playbackSupported, setPlaybackSupported] = useState(false);
+
+  // The MIME type we want for MediaRecorder and playback.
+  // Try preferred, fallback if needed.
+  const preferredMimeType = "audio/webm;codecs=opus";
+  const fallbackMimeType = "audio/webm";
+
+  useEffect(() => {
+    // Check playback browser support for our recorded type (after first render)
+    if (typeof window !== "undefined" && window.MediaRecorder && window.Audio) {
+      // Try to create a test audio element and check canPlayType
+      const a = document.createElement("audio");
+      // Prefer Opus in WebM if possible
+      let canPlay = a.canPlayType(preferredMimeType) || a.canPlayType(fallbackMimeType) || "";
+      setPlaybackSupported(!!canPlay);
+    }
+  }, []);
 
   useEffect(() => {
     // Cleanup blob URL when component unmounts or when new recording is made
@@ -265,21 +286,37 @@ function RecordingControls() {
   // Handler: Start recording
   const handleStartRecording = async () => {
     setErrorMsg(null);
+
     if (!recordingSupported) {
       setErrorMsg("Recording is not supported in your browser.");
       return;
     }
-    // Ask for mic permission
+    // Request mic permission
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new window.MediaRecorder(stream);
+
+      // Find supported MIME type
+      let mimeType = "";
+      if (window.MediaRecorder.isTypeSupported && window.MediaRecorder.isTypeSupported(preferredMimeType)) {
+        mimeType = preferredMimeType;
+      } else if (window.MediaRecorder.isTypeSupported && window.MediaRecorder.isTypeSupported(fallbackMimeType)) {
+        mimeType = fallbackMimeType;
+      } else {
+        setErrorMsg("Your browser does not support the required audio recording format. Try Chrome/Edge/Firefox.");
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
+
+      const recorder = new window.MediaRecorder(stream, { mimeType });
       setMediaRecorder(recorder);
       setRecordedChunks([]); // Clear prev
+      // Accumulate chunks into state for final blob
       recorder.ondataavailable = event => {
         if (event.data.size > 0) setRecordedChunks(prev => prev.concat(event.data));
       };
       recorder.onstop = () => {
-        const blob = new Blob(recordedChunks, { type: "audio/webm" });
+        // Only construct blob after stopped and chunks present
+        const blob = new Blob(recordedChunks, { type: mimeType });
         if (audioUrl) URL.revokeObjectURL(audioUrl);
         setAudioUrl(URL.createObjectURL(blob));
         // Stop mic tracks
@@ -289,6 +326,7 @@ function RecordingControls() {
       recorder.start();
       setIsRecording(true);
       setAudioUrl(null);
+      setErrorMsg(null);
     } catch (err) {
       setErrorMsg("Microphone access denied or not available.");
     }
@@ -302,19 +340,31 @@ function RecordingControls() {
     }
   };
 
-  // Handler: Play the latest recording
-  const handlePlayRecording = () => {
-    if (audioPlayerRef.current && audioUrl) {
-      audioPlayerRef.current.currentTime = 0;
-      audioPlayerRef.current.play();
-      setIsPlayingRecording(true);
+  // Handler: Play the latest recording (user-initiated only after blob is set)
+  const handlePlayRecording = async () => {
+    if (audioPlayerRef.current && audioUrl && !isRecording) {
+      try {
+        audioPlayerRef.current.currentTime = 0;
+        const p = audioPlayerRef.current.play();
+        // Handle both promise or sync return
+        if (p && typeof p.then === "function") {
+          await p;
+        }
+        setIsPlayingRecording(true);
+      } catch (err) {
+        setErrorMsg("Playback error: Your browser may not support this audio format or playback was interrupted.");
+        setIsPlayingRecording(false);
+      }
     }
   };
+
+  // Play button is enabled only if: we have an audioUrl, not recording, and playbackSupported.
+  const playButtonEnabled = !!audioUrl && !isRecording && playbackSupported;
 
   return (
     <div style={{ flex: 1, minWidth: 200, maxWidth: 350, display: "flex", flexDirection: "column", gap: 6 }}>
       <div style={{ marginBottom: 6, fontWeight: 500 }}>Controls</div>
-      {/* Show error message if any */}
+      {/* Show error/fallback message if any */}
       {errorMsg && (
         <div style={{
           color: "#d43a58",
@@ -325,6 +375,25 @@ function RecordingControls() {
           padding: 6
         }}>
           {errorMsg}
+        </div>
+      )}
+      {!recordingSupported && (
+        <div style={{
+          color: "#d43a58",
+          fontSize: 13,
+          marginBottom: 8
+        }}>
+          Sorry, your browser does not support audio recording (
+          <span style={{ fontFamily: "monospace", fontSize: "0.97em" }}>MediaRecorder</span>).
+        </div>
+      )}
+      {!playbackSupported && (
+        <div style={{
+          color: "#d43a58",
+          fontSize: 13,
+          marginBottom: 8
+        }}>
+          Sorry, your browser does not support playback of this audio format.
         </div>
       )}
       <button
@@ -340,7 +409,7 @@ function RecordingControls() {
           transition: "background .18s"
         }}
         onClick={handleStartRecording}
-        disabled={isRecording}
+        disabled={isRecording || !recordingSupported}
         aria-label="Start Recording"
       >
         <span role="img" aria-label="mic">🎙️</span> Start Recording
@@ -372,11 +441,11 @@ function RecordingControls() {
           fontWeight: 700,
           fontSize: "1.07rem",
           marginTop: 10,
-          opacity: !audioUrl || isRecording ? 0.5 : 1,
-          cursor: !audioUrl || isRecording ? "not-allowed" : "pointer"
+          opacity: playButtonEnabled ? 1 : 0.5,
+          cursor: playButtonEnabled ? "pointer" : "not-allowed"
         }}
         onClick={handlePlayRecording}
-        disabled={!audioUrl || isRecording}
+        disabled={!playButtonEnabled}
         aria-label="Play Recording"
       >
         <span role="img" aria-label="play">▶️</span> Play Recording

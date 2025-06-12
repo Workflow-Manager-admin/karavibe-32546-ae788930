@@ -11,26 +11,26 @@ asset bundle.js 1.84 MiB [emitted] (name: main)
 asset index.html 662 bytes [emitted]
 runtime modules 27.5 KiB 14 modules
 orphan modules 12.8 KiB [orphan] 3 modules
-javascript modules 1.66 MiB
+javascript modules 1.67 MiB
   modules by path ./node_modules/ 1.61 MiB 34 modules
-  modules by path ./src/ 39.2 KiB
+  modules by path ./src/ 44.2 KiB
     modules by path ./src/components/*.js 7.53 KiB 5 modules
     modules by path ./src/*.css 7.62 KiB 4 modules
-    modules by path ./src/containers/*.js 21.7 KiB 4 modules
+    modules by path ./src/containers/*.js 26.7 KiB 4 modules
     modules by path ./src/*.js 2.33 KiB 2 modules
   modules by path ./.ve/ 15.1 KiB
     modules by path ./.ve/*.js 10.6 KiB 2 modules
     modules by path ./.ve/*.css 2.93 KiB 2 modules
     ./.ve/EditorOverlay.jsx 1.58 KiB [built] [code generated]
 ./src/assets/songs.json 612 bytes [built] [code generated]
-webpack 5.99.9 compiled successfully in 1797 ms
+webpack 5.99.9 compiled successfully in 1793 ms
 assets by status 662 bytes [cached] 1 asset
 assets by path *.js 1.87 MiB
-  asset bundle.js 1.84 MiB [emitted] (name: main)
-  asset main.443a4b3109a9638e95d2.hot-update.js 22.2 KiB [emitted] [immutable] [hmr] (name: main)
-asset main.443a4b3109a9638e95d2.hot-update.json 28 bytes [emitted] [immutable] [hmr]
-Entrypoint main 1.87 MiB = bundle.js 1.84 MiB main.443a4b3109a9638e95d2.hot-update.js 22.2 KiB
+  asset bundle.js 1.85 MiB [emitted] (name: main)
+  asset main.6b3f70a51512a57ba0a7.hot-update.js 25.5 KiB [emitted] [immutable] [hmr] (name: main)
+asset main.6b3f70a51512a57ba0a7.hot-update.json 28 bytes [emitted] [immutable] [hmr]
+Entrypoint main 1.87 MiB = bundle.js 1.85 MiB main.6b3f70a51512a57ba0a7.hot-update.js 25.5 KiB
 cached modules 1.66 MiB [cached] 57 modules
 runtime modules 27.5 KiB 14 modules
-./src/containers/RecordingScreen.js 16.7 KiB [built] [code generated]
-webpack 5.99.9 compiled successfully in 223 ms
+./src/containers/RecordingScreen.js 19.6 KiB [built] [code generated]
+webpack 5.99.9 compiled successfully in 253 ms
