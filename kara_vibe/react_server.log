@@ -23,14 +23,66 @@ javascript modules 1.69 MiB
     modules by path ./.ve/*.css 2.93 KiB 2 modules
     ./.ve/EditorOverlay.jsx 1.58 KiB [built] [code generated]
 ./src/assets/songs.json 612 bytes [built] [code generated]
-webpack 5.99.9 compiled successfully in 1999 ms
+webpack 5.99.9 compiled successfully in 1974 ms
 assets by status 662 bytes [cached] 1 asset
-assets by path *.js 1.89 MiB
-  asset bundle.js 1.87 MiB [emitted] (name: main)
-  asset main.73ce6b4e634de1320b16.hot-update.js 16.7 KiB [emitted] [immutable] [hmr] (name: main)
-asset main.73ce6b4e634de1320b16.hot-update.json 28 bytes [emitted] [immutable] [hmr]
-Entrypoint main 1.89 MiB = bundle.js 1.87 MiB main.73ce6b4e634de1320b16.hot-update.js 16.7 KiB
-cached modules 1.69 MiB [cached] 58 modules
+assets by path *.js 1.92 MiB
+  asset bundle.js 1.88 MiB [emitted] (name: main)
+  asset main.596c49bae8acd99a01c6.hot-update.js 41.6 KiB [emitted] [immutable] [hmr] (name: main)
+asset main.596c49bae8acd99a01c6.hot-update.json 28 bytes [emitted] [immutable] [hmr]
+Entrypoint main 1.92 MiB = bundle.js 1.88 MiB main.596c49bae8acd99a01c6.hot-update.js 41.6 KiB
+cached modules 1.68 MiB [cached] 58 modules
 runtime modules 27.5 KiB 14 modules
-./src/containers/PlaybackScreen.js 11.9 KiB [built] [code generated]
-webpack 5.99.9 compiled successfully in 89 ms
+javascript modules 32.6 KiB
+  ./src/containers/RecordingScreen.js 29.2 KiB [built] [code generated]
+  ./src/components/FilterSelector.js 3.37 KiB [built] [code generated]
+webpack 5.99.9 compiled successfully in 251 ms
+assets by status 662 bytes [cached] 1 asset
+assets by path *.js 1.91 MiB
+  asset bundle.js 1.88 MiB [emitted] (name: main)
+  asset main.a5b9a2dc793e24cae914.hot-update.js 35.8 KiB [emitted] [immutable] [hmr] (name: main)
+asset main.a5b9a2dc793e24cae914.hot-update.json 28 bytes [emitted] [immutable] [hmr]
+Entrypoint main 1.91 MiB = bundle.js 1.88 MiB main.a5b9a2dc793e24cae914.hot-update.js 35.8 KiB
+cached modules 1.68 MiB [cached] 59 modules
+runtime modules 27.5 KiB 14 modules
+./src/containers/RecordingScreen.js 28.5 KiB [built] [code generated]
+webpack 5.99.9 compiled successfully in 122 ms
+assets by status 662 bytes [cached] 1 asset
+assets by path *.js 1.92 MiB
+  asset bundle.js 1.88 MiB [emitted] (name: main)
+  asset main.460c9666bbbbf84bcbad.hot-update.js 38 KiB [emitted] [immutable] [hmr] (name: main)
+asset main.460c9666bbbbf84bcbad.hot-update.json 28 bytes [emitted] [immutable] [hmr]
+Entrypoint main 1.92 MiB = bundle.js 1.88 MiB main.460c9666bbbbf84bcbad.hot-update.js 38 KiB
+cached modules 1.68 MiB [cached] 59 modules
+runtime modules 27.5 KiB 14 modules
+./src/containers/RecordingScreen.js 30.4 KiB [built] [code generated]
+webpack 5.99.9 compiled successfully in 135 ms
+assets by status 662 bytes [cached] 1 asset
+assets by path *.js 1.9 MiB
+  asset bundle.js 1.88 MiB [emitted] (name: main)
+  asset main.76f323aab489c2fa9e3a.hot-update.js 18.6 KiB [emitted] [immutable] [hmr] (name: main)
+asset main.76f323aab489c2fa9e3a.hot-update.json 28 bytes [emitted] [immutable] [hmr]
+Entrypoint main 1.9 MiB = bundle.js 1.88 MiB main.76f323aab489c2fa9e3a.hot-update.js 18.6 KiB
+cached modules 1.7 MiB [cached] 59 modules
+runtime modules 27.5 KiB 14 modules
+./src/containers/PlaybackScreen.js 13.8 KiB [built] [code generated]
+webpack 5.99.9 compiled successfully in 136 ms
+assets by status 662 bytes [cached] 1 asset
+assets by path *.js 1.91 MiB
+  asset bundle.js 1.89 MiB [emitted] (name: main)
+  asset main.29fe302d5e866fc7b89d.hot-update.js 22.4 KiB [emitted] [immutable] [hmr] (name: main)
+asset main.29fe302d5e866fc7b89d.hot-update.json 28 bytes [emitted] [immutable] [hmr]
+Entrypoint main 1.91 MiB = bundle.js 1.89 MiB main.29fe302d5e866fc7b89d.hot-update.js 22.4 KiB
+cached modules 1.7 MiB [cached] 59 modules
+runtime modules 27.5 KiB 14 modules
+./src/containers/PlaybackScreen.js 17.3 KiB [built] [code generated]
+webpack 5.99.9 compiled successfully in 97 ms
+assets by status 662 bytes [cached] 1 asset
+assets by path *.js 1.92 MiB
+  asset bundle.js 1.89 MiB [emitted] (name: main)
+  asset main.ea58cafec555a6fc469b.hot-update.js 37 KiB [emitted] [immutable] [hmr] (name: main)
+asset main.ea58cafec555a6fc469b.hot-update.json 28 bytes [emitted] [immutable] [hmr]
+Entrypoint main 1.92 MiB = bundle.js 1.89 MiB main.ea58cafec555a6fc469b.hot-update.js 37 KiB
+cached modules 1.68 MiB [cached] 59 modules
+runtime modules 27.5 KiB 14 modules
+./src/containers/RecordingScreen.js 29.1 KiB [built] [code generated]
+webpack 5.99.9 compiled successfully in 145 ms

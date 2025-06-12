@@ -2,11 +2,12 @@ import React, { useRef, useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import songsData from "../assets/songs.json";
 import LyricsDisplay from "../components/LyricsDisplay";
+import FilterSelector from "../components/FilterSelector";
 
 /**
  * PUBLIC_INTERFACE
  * RecordingScreen container – allows user to play instrumental, see (synced) lyrics,
- * record vocals, and select voice filters (placeholder). Receives songId via route param.
+ * record vocals, and select voice filters. Receives songId via route param.
  */
 function RecordingScreen() {
   const { songId } = useParams();
@@ -16,7 +17,6 @@ function RecordingScreen() {
   const song = songsData.find((s) => String(s.id) === String(songId));
 
   // MOCK: Lyrics with timestamps demo for each song (for real app, would fetch per song)
-  // Simple lines with time in seconds for testing sync
   const demoLyrics = [
     { time: 0, text: "[Intro]" },
     { time: 2, text: "Tell me somethin', girl" },
@@ -34,10 +34,6 @@ function RecordingScreen() {
   // For real implementation, switch lyrics per song/ID from a (future) backend.
   const lyrics = demoLyrics;
 
-  // Audio fake/mock: use a demo track, but for demonstration, let's use <audio> w/ a short sample instrumental URL.
-  // To keep it simple, use a royalty-free sample if in prod; for now, use a short data URI or placeholder.
-  // Here, we'll use a <audio> and simulate progress for lyric sync.
-
   // Use ref to access and control audio element
   const audioRef = useRef(null);
 
@@ -47,11 +43,24 @@ function RecordingScreen() {
   // Unified recording flag for child component sync
   const [isRecording, setIsRecording] = useState(false);
 
+  // New: Filter selection state. Default is 'none'
+  const [selectedFilter, setSelectedFilter] = useState("none");
+
+  // States for latest recording preview/playback
+  const [audioUrl, setAudioUrl] = useState(null);
+  const [isPlayingRecording, setIsPlayingRecording] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [downloadUrl, setDownloadUrl] = useState(null);
+  const [fileName, setFileName] = useState("");
+  const [metaTitle, setMetaTitle] = useState(song?.title ?? "");
+  const [metaArtist, setMetaArtist] = useState(song?.artist ?? "");
+  const audioPlayerRef = useRef(null);
+
   // Auto update currentTime in sync with audio, and keep as master clock for lyrics sync
   useEffect(() => {
     const audioEl = audioRef.current;
     if (!audioEl) return;
-    // Listen to timeupdate, play, pause, seeked
+
     const onTimeUpdate = () => setCurrentTime(audioEl.currentTime);
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
@@ -62,7 +71,6 @@ function RecordingScreen() {
     audioEl.addEventListener("pause", onPause);
     audioEl.addEventListener("seeked", onSeeked);
 
-    // Clean up
     return () => {
       audioEl.removeEventListener("timeupdate", onTimeUpdate);
       audioEl.removeEventListener("play", onPlay);
@@ -87,11 +95,9 @@ function RecordingScreen() {
   useEffect(() => {
     const audio = audioRef.current;
     if (isRecording && audio) {
-      // When we start recording, restart instrumental audio and play
       audio.currentTime = 0; // Reset to start
       audio.play();
     }
-    // When we stop recording, pause instrumental track
     if (!isRecording && audio) {
       audio.pause();
     }
@@ -109,9 +115,25 @@ function RecordingScreen() {
     }
   }, [songId]);
 
+  // Handler to preview the last recording (with filter)
+  const handlePreviewWithFilter = () => {
+    if (!audioUrl) return;
+    window.scrollTo(0, 0);
+    navigate('/playback', {
+      state: {
+        audioUrl,
+        title: metaTitle,
+        artist: metaArtist,
+        filter: selectedFilter,
+        lyrics,
+        songId: song?.id,
+        filterLabel: selectedFilter
+      }
+    });
+  };
+
   // Fallback for invalid song
   if (!song) {
-    // If invalid songId, navigate back or show fallback
     return (
       <div style={{ marginTop: 40, textAlign: "center" }}>
         <div className="title" style={{ fontSize: "2rem" }}>Song Not Found</div>
@@ -165,10 +187,9 @@ function RecordingScreen() {
           }}>
             Instrumental Track
           </div>
-          {/* Simple audio player control, disables Play/Pause during recording */}
           <audio
             ref={audioRef}
-            src="https://cdn.pixabay.com/audio/2022/08/20/audio_124bfa496e.mp3" // Royalty-free short track (<1min) for demo
+            src="https://cdn.pixabay.com/audio/2022/08/20/audio_124bfa496e.mp3"
             controls
             style={{
               width: "100%",
@@ -178,7 +199,6 @@ function RecordingScreen() {
               borderRadius: 8,
               boxShadow: "0 1px 10px #14131433",
             }}
-            // native controls allowed, but we lock custom controls below
             disabled={isRecording ? true : undefined}
           />
           <div style={{ margin: "8px 0" }}>
@@ -221,69 +241,105 @@ function RecordingScreen() {
         justifyContent: "center",
         marginTop: 18
       }}>
-        {/* Record, Stop, Play logic implemented – handles browser mic recording & playback */}
         <RecordingControls
           isRecording={isRecording}
           setIsRecording={setIsRecording}
           audioRef={audioRef}
           song={song}
+          setAudioUrl={setAudioUrl}
+          audioUrl={audioUrl}
+          metaTitle={metaTitle}
+          setMetaTitle={setMetaTitle}
+          metaArtist={metaArtist}
+          setMetaArtist={setMetaArtist}
+          isPlayingRecording={isPlayingRecording}
+          setIsPlayingRecording={setIsPlayingRecording}
+          downloadSuccess={downloadSuccess}
+          setDownloadSuccess={setDownloadSuccess}
+          downloadUrl={downloadUrl}
+          setDownloadUrl={setDownloadUrl}
+          fileName={fileName}
+          setFileName={setFileName}
         />
-        {/* Voice Filter Selection – placeholder only */}
-        <div style={{
-          flex: 1,
-          minWidth: 180,
-          maxWidth: 340,
-          background: "#171820",
-          padding: "16px 20px",
-          borderRadius: 8,
-          border: "1px solid var(--border-color)"
-        }}>
-          <div style={{
-            fontWeight: 500,
-            color: "var(--primary)",
-            marginBottom: 10
-          }}>
-            Voice Filter
-          </div>
-          <div style={{ color: "var(--text-secondary)", fontSize: "1rem" }}>
-            [Coming soon: choose voice effects for your vocals here!]
+        <FilterSelector
+          selectedFilter={selectedFilter}
+          onChange={setSelectedFilter}
+        />
+      </div>
+      {/* Show audio player only if recording is present */}
+      {audioUrl && (
+        <div style={{ marginTop: 16 }}>
+          <audio
+            ref={audioPlayerRef}
+            src={audioUrl}
+            controls
+            style={{
+              width: "100%",
+              background: "#232535",
+              borderRadius: 8,
+              boxShadow: "0 1px 10px #14131433",
+            }}
+          />
+          {isPlayingRecording && (
+            <div style={{ color: "var(--primary)", fontWeight: 600, textAlign: "center", fontSize: 14, marginTop: 4 }}>
+              Playing your latest take...
+            </div>
+          )}
+          <div style={{ marginTop: 10, textAlign: "center" }}>
+            <button
+              className="btn btn-large"
+              style={{
+                background: "var(--primary)",
+                color: "#fff",
+                margin: "10px auto 0 auto",
+                fontWeight: 700,
+                fontSize: "1.06rem",
+                borderRadius: 20
+              }}
+              onClick={handlePreviewWithFilter}
+              disabled={!audioUrl}
+            >
+              🎧 Preview with Filter
+            </button>
+            <div style={{
+              color: "var(--text-secondary)",
+              marginTop: 4,
+              fontSize: 13
+            }}>
+              Hear your recording with <span style={{ color: "var(--accent)", fontWeight: 500 }}>{selectedFilter === "none" ? "no filter" : selectedFilter}</span>
+            </div>
           </div>
         </div>
-      </div>
-      {/* Future enhancements: visualization, playback, share */}
+      )}
     </div>
   );
 }
 
-/**
- * PUBLIC_INTERFACE
- * RecordingControls
- * Provides microphone access, voice recording using MediaRecorder, and audio playback.
- * UI: Start Recording, Stop Recording, Play Recording controls, and in-page audio player.
- */
-/**
- * PUBLIC_INTERFACE
- * RecordingControls (Sync/Enhanced)
- * Provides microphone access, voice recording using MediaRecorder, and unified audio/lyrics sync for recording.
- * Props:
- *    isRecording: boolean, if currently recording (controlled by parent)
- *    setIsRecording: fn, to change recording state (to control parent sync)
- *    audioRef: ref to the instrumental audio DOM element
- */
-function RecordingControls({ isRecording, setIsRecording, audioRef, song }) {
+// PUBLIC_INTERFACE
+// RecordingControls component with prop-injected state for the new filter and recording flow.
+function RecordingControls({
+  isRecording,
+  setIsRecording,
+  audioRef,
+  song,
+  setAudioUrl,
+  audioUrl,
+  metaTitle,
+  setMetaTitle,
+  metaArtist,
+  setMetaArtist,
+  isPlayingRecording,
+  setIsPlayingRecording,
+  downloadSuccess,
+  setDownloadSuccess,
+  downloadUrl,
+  setDownloadUrl,
+  fileName,
+  setFileName
+}) {
   const [recordedChunks, setRecordedChunks] = useState([]);
   const [mediaRecorder, setMediaRecorder] = useState(null);
-  const [audioUrl, setAudioUrl] = useState(null);
-  const [isPlayingRecording, setIsPlayingRecording] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
-  const [downloadSuccess, setDownloadSuccess] = useState(false);
-  const [downloadUrl, setDownloadUrl] = useState(null);
-  const [fileName, setFileName] = useState("");
-  // Metadata fields (for demonstration can be edited/extended)
-  const [metaTitle, setMetaTitle] = useState(song?.title ?? "");
-  const [metaArtist, setMetaArtist] = useState(song?.artist ?? "");
-
-  const audioPlayerRef = useRef(null);
 
   // Track support for MediaRecorder and playback MIME
   const [recordingSupported, setRecordingSupported] = useState(
@@ -295,22 +351,26 @@ function RecordingControls({ isRecording, setIsRecording, audioRef, song }) {
   const fallbackMimeType = "audio/webm";
 
   useEffect(() => {
-    // Check playback browser support for our recorded type (after first render)
     if (typeof window !== "undefined" && window.MediaRecorder && window.Audio) {
       const a = document.createElement("audio");
-      let canPlay = a.canPlayType(preferredMimeType) || a.canPlayType(fallbackMimeType) || "";
+      let canPlay =
+        a.canPlayType(preferredMimeType) ||
+        a.canPlayType(fallbackMimeType) ||
+        "";
       setPlaybackSupported(!!canPlay);
     }
   }, []);
 
   useEffect(() => {
-    // Cleanup blob URL when component unmounts or when new recording is made
     return () => {
       if (audioUrl) {
         URL.revokeObjectURL(audioUrl);
       }
     };
+    // eslint-disable-next-line
   }, [audioUrl]);
+
+  const audioPlayerRef = useRef(null);
 
   useEffect(() => {
     const player = audioPlayerRef.current;
@@ -320,35 +380,43 @@ function RecordingControls({ isRecording, setIsRecording, audioRef, song }) {
     return () => {
       player.removeEventListener("ended", onEnded);
     };
+    // eslint-disable-next-line
   }, []);
 
-  // Handler: Start recording (sync with audio and parent)
   const handleStartRecording = async () => {
     setErrorMsg(null);
     if (!recordingSupported) {
       setErrorMsg("Recording is not supported in your browser.");
       return;
     }
-    // Request mic permission
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       let mimeType = "";
-      if (window.MediaRecorder.isTypeSupported && window.MediaRecorder.isTypeSupported(preferredMimeType)) {
+      if (
+        window.MediaRecorder.isTypeSupported &&
+        window.MediaRecorder.isTypeSupported(preferredMimeType)
+      ) {
         mimeType = preferredMimeType;
-      } else if (window.MediaRecorder.isTypeSupported && window.MediaRecorder.isTypeSupported(fallbackMimeType)) {
+      } else if (
+        window.MediaRecorder.isTypeSupported &&
+        window.MediaRecorder.isTypeSupported(fallbackMimeType)
+      ) {
         mimeType = fallbackMimeType;
       } else {
-        setErrorMsg("Your browser does not support the required audio recording format. Try Chrome/Edge/Firefox.");
-        stream.getTracks().forEach(track => track.stop());
+        setErrorMsg(
+          "Your browser does not support the required audio recording format. Try Chrome/Edge/Firefox."
+        );
+        stream.getTracks().forEach((track) => track.stop());
         return;
       }
 
-      setRecordedChunks([]); // Clear prev
+      setRecordedChunks([]);
       const recorder = new window.MediaRecorder(stream, { mimeType });
       setMediaRecorder(recorder);
 
-      recorder.ondataavailable = event => {
-        if (event.data.size > 0) setRecordedChunks(prev => prev.concat(event.data));
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0)
+          setRecordedChunks((prev) => prev.concat(event.data));
       };
       recorder.onstop = () => {
         const blob = new Blob(recordedChunks, { type: mimeType });
@@ -357,35 +425,32 @@ function RecordingControls({ isRecording, setIsRecording, audioRef, song }) {
         setAudioUrl(audioBlobUrl);
         setDownloadUrl(null);
         setDownloadSuccess(false);
-        // Build a suggested filename from metadata if available
         let baseName = "karaoke-recording";
         if (metaTitle && metaArtist) {
-          baseName = `${metaTitle} - ${metaArtist}`.replace(/[^\w\d _-]/g, "");
+          baseName = `${metaTitle} - ${metaArtist}`.replace(
+            /[^\w\d _-]/g,
+            ""
+          );
         } else if (metaTitle) {
           baseName = `${metaTitle}`.replace(/[^\w\d _-]/g, "");
         }
-        setFileName(`${baseName}.${mimeType.includes("wav") ? "wav" : "webm"}`);
-        stream.getTracks().forEach(track => track.stop()); // Clean up mic
-        setIsRecording(false); // finish recording state (propagates out to parent)
+        setFileName(
+          `${baseName}.${mimeType.includes("wav") ? "wav" : "webm"}`
+        );
+        stream.getTracks().forEach((track) => track.stop());
+        setIsRecording(false);
       };
 
-      // ---- Begin "karaoke sync": 1) Start MediaRecorder 2) Play audio from start 3) Lyrics sync managed by parent using audioRef ----
-      // (signal to parent that recording is initiated - which triggers audio to start at t=0)
-      setIsRecording(true); // Will cause (in parent) to reset and play audio from start
+      setIsRecording(true);
 
-      // Note: Start recorder once audio is playing from t=0 for maximal sync
-      // Wait for audio play promise (auto-play), fall back to immediate start after short delay if needed
       const audioEl = audioRef?.current;
       if (audioEl) {
         audioEl.currentTime = 0;
         const p = audioEl.play();
-        // For modern browsers, start recorder when playback starts
         if (p && typeof p.then === "function") {
           p.then(() => {
-            // Slightly delayed to allow audio to start (for best sync)
             setTimeout(() => recorder.start(), 80);
           }).catch(() => {
-            // If failed, still try starting
             recorder.start();
           });
         } else {
@@ -401,20 +466,17 @@ function RecordingControls({ isRecording, setIsRecording, audioRef, song }) {
     }
   };
 
-  // Handler: Stop recording (sync all)
   const handleStopRecording = () => {
     if (mediaRecorder && isRecording) {
       mediaRecorder.stop();
       setMediaRecorder(null);
-      // Also pause the instrumental audio and let parent know to halt lyrics/audio
-      setIsRecording(false); // Will propagate to parent, which will pause audio
+      setIsRecording(false);
       if (audioRef && audioRef.current) {
         audioRef.current.pause();
       }
     }
   };
 
-  // Handler: Play the latest recording
   const handlePlayRecording = async () => {
     if (audioPlayerRef.current && audioUrl && !isRecording) {
       try {
@@ -425,13 +487,14 @@ function RecordingControls({ isRecording, setIsRecording, audioRef, song }) {
         }
         setIsPlayingRecording(true);
       } catch (err) {
-        setErrorMsg("Playback error: Your browser may not support this audio format or playback was interrupted.");
+        setErrorMsg(
+          "Playback error: Your browser may not support this audio format or playback was interrupted."
+        );
         setIsPlayingRecording(false);
       }
     }
   };
 
-  // Handler: Save/Download the latest recording with metadata (if any)
   const handleSaveRecording = (e) => {
     e.preventDefault();
     setDownloadSuccess(false);
@@ -440,13 +503,10 @@ function RecordingControls({ isRecording, setIsRecording, audioRef, song }) {
       setErrorMsg("No recording to save.");
       return;
     }
-    // Compose blob and optionally metadata (.webm/.wav do not support user metadata in-browser for download, 
-    // but we create a metadata JSON for demo and name it similarly)
     const mime = recordedChunks[0]?.type || "audio/webm";
     const combinedBlob = new Blob(recordedChunks, { type: mime });
     const url = URL.createObjectURL(combinedBlob);
 
-    // Save the audio file
     const link = document.createElement("a");
     link.href = url;
     link.download = fileName || "karaoke-recording.webm";
@@ -455,7 +515,6 @@ function RecordingControls({ isRecording, setIsRecording, audioRef, song }) {
     setDownloadSuccess(true);
     setDownloadUrl(url);
 
-    // Also allow downloading metadata separately (optional UX demonstration)
     if (metaTitle || metaArtist) {
       const metadata = {
         title: metaTitle,
@@ -468,7 +527,6 @@ function RecordingControls({ isRecording, setIsRecording, audioRef, song }) {
         { type: "application/json" }
       );
       const metadataUrl = URL.createObjectURL(metadataBlob);
-      
       setTimeout(() => {
         const metaLink = document.createElement("a");
         metaLink.href = metadataUrl;
@@ -476,7 +534,7 @@ function RecordingControls({ isRecording, setIsRecording, audioRef, song }) {
         document.body.appendChild(metaLink);
         metaLink.click();
         document.body.removeChild(metaLink);
-      }, 350); // Slight delay to avoid browser restrictions
+      }, 350);
     }
     document.body.removeChild(link);
   };
@@ -487,7 +545,6 @@ function RecordingControls({ isRecording, setIsRecording, audioRef, song }) {
   return (
     <div style={{ flex: 1, minWidth: 200, maxWidth: 350, display: "flex", flexDirection: "column", gap: 6 }}>
       <div style={{ marginBottom: 6, fontWeight: 500 }}>Controls</div>
-      {/* Show error/fallback message if any */}
       {errorMsg && (
         <div style={{
           color: "#d43a58",
@@ -501,7 +558,6 @@ function RecordingControls({ isRecording, setIsRecording, audioRef, song }) {
         </div>
       )}
 
-      {/* Metadata fields to optionally edit/persist */}
       {(audioUrl && !isRecording && (metaTitle || metaArtist !== undefined)) && (
         <form style={{ marginBottom: 7 }}>
           <div style={{ marginBottom: 7 }}>
@@ -598,7 +654,6 @@ function RecordingControls({ isRecording, setIsRecording, audioRef, song }) {
       >
         <span role="img" aria-label="play">▶️</span> Play Recording
       </button>
-      {/* Save button appears only when a recording is available and not recording */}
       <button
         className="btn btn-large"
         style={{
@@ -618,7 +673,6 @@ function RecordingControls({ isRecording, setIsRecording, audioRef, song }) {
       >
         <span role="img" aria-label="save">💾</span> Save Recording
       </button>
-
       {downloadSuccess && downloadUrl && (
         <div style={{ marginTop: 24, background: "#171c18", padding: 12, border: "1px solid var(--primary)", borderRadius: 7, textAlign: "center" }}>
           <div style={{ color: "var(--primary)", fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
@@ -646,7 +700,6 @@ function RecordingControls({ isRecording, setIsRecording, audioRef, song }) {
           </div>
         </div>
       )}
-
       {/* Show audio player only if recording is present */}
       {audioUrl && (
         <div style={{ marginTop: 16 }}>
@@ -671,7 +724,6 @@ function RecordingControls({ isRecording, setIsRecording, audioRef, song }) {
     </div>
   );
 }
-
 
 // Utility to format seconds to mm:ss
 function formatTime(sec) {

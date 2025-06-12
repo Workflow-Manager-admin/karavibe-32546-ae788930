@@ -4,6 +4,63 @@ import LyricsDisplay from "../components/LyricsDisplay";
 import songsData from "../assets/songs.json";
 
 /**
+ * Utility function: create the requested voice filter effect node using the Web Audio API,
+ * given a base AudioContext and connect chain.
+ */
+function createVoiceFilter(context, filterType) {
+  if (filterType === "reverb") {
+    // Minimal fake reverb with small convolution, for demo (not full realism!).
+    const convolver = context.createConvolver();
+    // Make short impulse buffer
+    const rate = context.sampleRate;
+    const length = rate * 1.2; // 1.2 sec
+    const decay = 2.2;
+    const impulse = context.createBuffer(2, length, rate);
+    for (let c = 0; c < 2; c++) {
+      const channel = impulse.getChannelData(c);
+      for (let i = 0; i < length; i++) {
+        channel[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+      }
+    }
+    convolver.buffer = impulse;
+    return convolver;
+  }
+  if (filterType === "robot") {
+    // Simple robot: amplitude modulation (ring mod) with high freq oscillator
+    const mod = context.createOscillator();
+    mod.type = "square";
+    mod.frequency.value = 90; // 90 Hz for robotic
+    const gain = context.createGain();
+    gain.gain.value = 0.5;
+    mod.connect(gain.gain);
+    mod.start();
+    return {
+      input: gain,
+      output: gain,
+      mod: mod,
+      cleanup: () => mod.stop()
+    };
+  }
+  if (filterType === "pitch") {
+    // Simple pitch shift: playbackRate hack (warning: affects speed + pitch)
+    // We'll handle this by setting source.playbackRate
+    // This filter returns an object for control (see note below)
+    return { pitchShift: 1.32 };
+  }
+  if (filterType === "auto-tune") {
+    // Simplified: use BiquadFilter for subtle EQ, feels "synthy"
+    const filter = context.createBiquadFilter();
+    filter.type = "peaking";
+    filter.frequency.value = 1200;
+    filter.Q.value = 6;
+    filter.gain.value = 9;
+    return filter;
+  }
+  // No effect (bypass)
+  return null;
+}
+
+/**
  * PUBLIC_INTERFACE
  * PlaybackScreen: Allows users to play back their saved recordings.
  * Features custom play/pause, seek, progress bar, 
@@ -61,31 +118,126 @@ function PlaybackScreen() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
 
-  // 2. Synchronize: lyrics, seek, play
+  // Web Audio API filter state
+  const filterNodeRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const sourceNodeRef = useRef(null);
+  const robotOscRef = useRef(null);
+
+  // 2. Synchronize: lyrics, seek, play, and hook up Web Audio pipeline on play
   useEffect(() => {
     const audioEl = audioRef.current;
     if (!audioEl) return;
+
+    let ctx = audioContextRef.current;
+    if (!ctx) ctx = audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+
+    // If already hooked up, disconnect old nodes
+    if (sourceNodeRef.current) {
+      try { sourceNodeRef.current.disconnect(); } catch {}
+      sourceNodeRef.current = null;
+    }
+    if (filterNodeRef.current?.cleanup) {
+      filterNodeRef.current.cleanup();
+    }
+    filterNodeRef.current = null;
+    if (robotOscRef.current) {
+      try { robotOscRef.current.disconnect(); } catch {}
+      robotOscRef.current = null;
+    }
+
+    // Patch the audio element into WebAudio for selected filter
+    let mediaSrc = null;
+    let filter = null;
+    let animationFrameId = null;
+
+    function setup() {
+      if (!audioEl || !ctx) return;
+      mediaSrc = ctx.createMediaElementSource(audioEl);
+      let filterType = metaFilter || "none";
+      filter = createVoiceFilter(ctx, filterType);
+      let finalNode = ctx.destination;
+
+      if (filterType === "robot" && filter && filter.input && filter.output && filter.mod) {
+        // Ring modulator, chain: --> gain.input, gain.output --> destination
+        mediaSrc.connect(filter.input);
+        filter.output.connect(finalNode);
+        robotOscRef.current = filter.mod;
+        if (filter.cleanup) filterNodeRef.current = filter;
+      } else if (filterType === "pitch" && filter && filter.pitchShift) {
+        // Use direct routing + playbackRate hack (affects speed+pitch)
+        mediaSrc.connect(finalNode);
+        // Animate playbackRate for demo
+        let originalRate = audioEl.playbackRate;
+        function setPitch() {
+          audioEl.playbackRate = isPlaying ? filter.pitchShift : 1.0;
+          animationFrameId = requestAnimationFrame(setPitch);
+        }
+        setPitch();
+        filterNodeRef.current = { cleanup: () => {
+          audioEl.playbackRate = 1.0;
+          if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        }};
+      } else if (filter && typeof filter.connect === "function") {
+        mediaSrc.connect(filter);
+        filter.connect(finalNode);
+        filterNodeRef.current = filter;
+      } else {
+        mediaSrc.connect(finalNode);
+      }
+
+      sourceNodeRef.current = mediaSrc;
+    }
+
+    // On play, set up route; on pause or unmount, disconnect
+    function onAudioPlay() {
+      ctx.resume();
+      setup();
+    }
+    function onAudioPause() {
+      if (filterNodeRef.current?.cleanup) filterNodeRef.current.cleanup();
+      filterNodeRef.current = null;
+      if (sourceNodeRef.current) {
+        try { sourceNodeRef.current.disconnect(); } catch {}
+        sourceNodeRef.current = null;
+      }
+    }
+
+    audioEl.addEventListener("play", onAudioPlay);
+    audioEl.addEventListener("pause", onAudioPause);
+    // For duration/progress
     const updateTime = () => setCurrentTime(audioEl.currentTime);
     const updateDuration = () => setDuration(audioEl.duration || 0);
-    const onPlay = () => setIsPlaying(true);
-    const onPause = () => setIsPlaying(false);
+    const setPlaying = () => setIsPlaying(true);
+    const setPaused = () => setIsPlaying(false);
 
     audioEl.addEventListener("timeupdate", updateTime);
     audioEl.addEventListener("durationchange", updateDuration);
-    audioEl.addEventListener("play", onPlay);
-    audioEl.addEventListener("pause", onPause);
+    audioEl.addEventListener("play", setPlaying);
+    audioEl.addEventListener("pause", setPaused);
 
     // Initialize duration for preloaded
     if (audioEl.duration) setDuration(audioEl.duration);
     setCurrentTime(audioEl.currentTime);
 
     return () => {
+      audioEl.removeEventListener("play", onAudioPlay);
+      audioEl.removeEventListener("pause", onAudioPause);
       audioEl.removeEventListener("timeupdate", updateTime);
       audioEl.removeEventListener("durationchange", updateDuration);
-      audioEl.removeEventListener("play", onPlay);
-      audioEl.removeEventListener("pause", onPause);
+      audioEl.removeEventListener("play", setPlaying);
+      audioEl.removeEventListener("pause", setPaused);
+
+      if (filterNodeRef.current?.cleanup) filterNodeRef.current.cleanup();
+      filterNodeRef.current = null;
+      if (sourceNodeRef.current) {
+        try { sourceNodeRef.current.disconnect(); } catch {}
+        sourceNodeRef.current = null;
+      }
     };
-  }, [audioUrl]);
+    // Only rerun graph if metaFilter or audioUrl changes
+  }, [audioUrl, metaFilter, isPlaying]);
+
 
   // Playback controls
   // PUBLIC_INTERFACE
