@@ -44,8 +44,10 @@ function RecordingScreen() {
   // For lyrics sync: controlled by audio element's currentTime (state needed for re-render)
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  // Unified recording flag for child component sync
+  const [isRecording, setIsRecording] = useState(false);
 
-  // Auto update currentTime in sync with audio
+  // Auto update currentTime in sync with audio, and keep as master clock for lyrics sync
   useEffect(() => {
     const audioEl = audioRef.current;
     if (!audioEl) return;
@@ -69,10 +71,11 @@ function RecordingScreen() {
     };
   }, []);
 
-  // Optionally implement simple play/pause controls for user interaction for demo
+  // Optionally implement simple play/pause controls for user interaction for demo, disabled when recording
   const handlePlayPause = () => {
     const audio = audioRef.current;
     if (!audio) return;
+    if (isRecording) return; // Do nothing if recording (controls are locked)
     if (isPlaying) {
       audio.pause();
     } else {
@@ -80,10 +83,26 @@ function RecordingScreen() {
     }
   };
 
+  // When recording flag becomes true, start audio playback and reset
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (isRecording && audio) {
+      // When we start recording, restart instrumental audio and play
+      audio.currentTime = 0; // Reset to start
+      audio.play();
+    }
+    // When we stop recording, pause instrumental track
+    if (!isRecording && audio) {
+      audio.pause();
+    }
+    // eslint-disable-next-line
+  }, [isRecording]);
+
   // Reset lyrics & progress if song changes (unlikely once loaded, but for robustness)
   useEffect(() => {
     setCurrentTime(0);
     setIsPlaying(false);
+    setIsRecording(false); // reset recording as well on song switch
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
       audioRef.current.pause();
@@ -146,7 +165,7 @@ function RecordingScreen() {
           }}>
             Instrumental Track
           </div>
-          {/* Simple audio player control (using a sample) */}
+          {/* Simple audio player control, disables Play/Pause during recording */}
           <audio
             ref={audioRef}
             src="https://cdn.pixabay.com/audio/2022/08/20/audio_124bfa496e.mp3" // Royalty-free short track (<1min) for demo
@@ -159,6 +178,8 @@ function RecordingScreen() {
               borderRadius: 8,
               boxShadow: "0 1px 10px #14131433",
             }}
+            // native controls allowed, but we lock custom controls below
+            disabled={isRecording ? true : undefined}
           />
           <div style={{ margin: "8px 0" }}>
             <button
@@ -170,9 +191,12 @@ function RecordingScreen() {
                 color: isPlaying ? "white" : "#fff",
                 borderRadius: 22,
                 padding: "7px 30px",
-                marginRight: 10
+                marginRight: 10,
+                opacity: isRecording ? 0.45 : 1,
+                cursor: isRecording ? "not-allowed" : "pointer"
               }}
               aria-label={isPlaying ? "Pause" : "Play"}
+              disabled={isRecording}
             >
               {isPlaying ? "Pause" : "Play"}
             </button>
@@ -198,7 +222,11 @@ function RecordingScreen() {
         marginTop: 18
       }}>
         {/* Record, Stop, Play logic implemented – handles browser mic recording & playback */}
-        <RecordingControls />
+        <RecordingControls
+          isRecording={isRecording}
+          setIsRecording={setIsRecording}
+          audioRef={audioRef}
+        />
         {/* Voice Filter Selection – placeholder only */}
         <div style={{
           flex: 1,
@@ -232,8 +260,16 @@ function RecordingScreen() {
  * Provides microphone access, voice recording using MediaRecorder, and audio playback.
  * UI: Start Recording, Stop Recording, Play Recording controls, and in-page audio player.
  */
-function RecordingControls() {
-  const [isRecording, setIsRecording] = useState(false);
+/**
+ * PUBLIC_INTERFACE
+ * RecordingControls (Sync/Enhanced)
+ * Provides microphone access, voice recording using MediaRecorder, and unified audio/lyrics sync for recording.
+ * Props:
+ *    isRecording: boolean, if currently recording (controlled by parent)
+ *    setIsRecording: fn, to change recording state (to control parent sync)
+ *    audioRef: ref to the instrumental audio DOM element
+ */
+function RecordingControls({ isRecording, setIsRecording, audioRef }) {
   const [recordedChunks, setRecordedChunks] = useState([]);
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [audioUrl, setAudioUrl] = useState(null);
@@ -247,17 +283,13 @@ function RecordingControls() {
   );
   const [playbackSupported, setPlaybackSupported] = useState(false);
 
-  // The MIME type we want for MediaRecorder and playback.
-  // Try preferred, fallback if needed.
   const preferredMimeType = "audio/webm;codecs=opus";
   const fallbackMimeType = "audio/webm";
 
   useEffect(() => {
     // Check playback browser support for our recorded type (after first render)
     if (typeof window !== "undefined" && window.MediaRecorder && window.Audio) {
-      // Try to create a test audio element and check canPlayType
       const a = document.createElement("audio");
-      // Prefer Opus in WebM if possible
       let canPlay = a.canPlayType(preferredMimeType) || a.canPlayType(fallbackMimeType) || "";
       setPlaybackSupported(!!canPlay);
     }
@@ -272,7 +304,6 @@ function RecordingControls() {
     };
   }, [audioUrl]);
 
-  // Handle playback ended to update play button state
   useEffect(() => {
     const player = audioPlayerRef.current;
     if (!player) return;
@@ -283,10 +314,9 @@ function RecordingControls() {
     };
   }, []);
 
-  // Handler: Start recording
+  // Handler: Start recording (sync with audio and parent)
   const handleStartRecording = async () => {
     setErrorMsg(null);
-
     if (!recordingSupported) {
       setErrorMsg("Recording is not supported in your browser.");
       return;
@@ -294,8 +324,6 @@ function RecordingControls() {
     // Request mic permission
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-      // Find supported MIME type
       let mimeType = "";
       if (window.MediaRecorder.isTypeSupported && window.MediaRecorder.isTypeSupported(preferredMimeType)) {
         mimeType = preferredMimeType;
@@ -307,24 +335,46 @@ function RecordingControls() {
         return;
       }
 
+      setRecordedChunks([]); // Clear prev
       const recorder = new window.MediaRecorder(stream, { mimeType });
       setMediaRecorder(recorder);
-      setRecordedChunks([]); // Clear prev
-      // Accumulate chunks into state for final blob
+
       recorder.ondataavailable = event => {
         if (event.data.size > 0) setRecordedChunks(prev => prev.concat(event.data));
       };
       recorder.onstop = () => {
-        // Only construct blob after stopped and chunks present
         const blob = new Blob(recordedChunks, { type: mimeType });
         if (audioUrl) URL.revokeObjectURL(audioUrl);
         setAudioUrl(URL.createObjectURL(blob));
-        // Stop mic tracks
-        stream.getTracks().forEach(track => track.stop());
-        setIsRecording(false);
+        stream.getTracks().forEach(track => track.stop()); // Clean up mic
+        setIsRecording(false); // finish recording state (propagates out to parent)
       };
-      recorder.start();
-      setIsRecording(true);
+
+      // ---- Begin "karaoke sync": 1) Start MediaRecorder 2) Play audio from start 3) Lyrics sync managed by parent using audioRef ----
+      // (signal to parent that recording is initiated - which triggers audio to start at t=0)
+      setIsRecording(true); // Will cause (in parent) to reset and play audio from start
+
+      // Note: Start recorder once audio is playing from t=0 for maximal sync
+      // Wait for audio play promise (auto-play), fall back to immediate start after short delay if needed
+      const audioEl = audioRef?.current;
+      if (audioEl) {
+        audioEl.currentTime = 0;
+        const p = audioEl.play();
+        // For modern browsers, start recorder when playback starts
+        if (p && typeof p.then === "function") {
+          p.then(() => {
+            // Slightly delayed to allow audio to start (for best sync)
+            setTimeout(() => recorder.start(), 80);
+          }).catch(() => {
+            // If failed, still try starting
+            recorder.start();
+          });
+        } else {
+          recorder.start();
+        }
+      } else {
+        recorder.start();
+      }
       setAudioUrl(null);
       setErrorMsg(null);
     } catch (err) {
@@ -332,21 +382,25 @@ function RecordingControls() {
     }
   };
 
-  // Handler: Stop recording
+  // Handler: Stop recording (sync all)
   const handleStopRecording = () => {
     if (mediaRecorder && isRecording) {
       mediaRecorder.stop();
       setMediaRecorder(null);
+      // Also pause the instrumental audio and let parent know to halt lyrics/audio
+      setIsRecording(false); // Will propagate to parent, which will pause audio
+      if (audioRef && audioRef.current) {
+        audioRef.current.pause();
+      }
     }
   };
 
-  // Handler: Play the latest recording (user-initiated only after blob is set)
+  // Handler: Play the latest recording
   const handlePlayRecording = async () => {
     if (audioPlayerRef.current && audioUrl && !isRecording) {
       try {
         audioPlayerRef.current.currentTime = 0;
         const p = audioPlayerRef.current.play();
-        // Handle both promise or sync return
         if (p && typeof p.then === "function") {
           await p;
         }
@@ -358,7 +412,6 @@ function RecordingControls() {
     }
   };
 
-  // Play button is enabled only if: we have an audioUrl, not recording, and playbackSupported.
   const playButtonEnabled = !!audioUrl && !isRecording && playbackSupported;
 
   return (
